@@ -1,0 +1,387 @@
+//@version=4
+study("Custom", overlay = true)
+
+enablePivots = input(true, title="Show Pivots ?")
+enableTomorrowPivots = input(true, title="Show Tomorrow Pivots ?")
+enableWeeklyPivots = input(true, title="Show Weekly Pivots ?")
+enableNextWeekPivots = input(true, title="Show Wext Week Pivots ?")
+enableEMA = input(false, title="Show EMAs ?")
+enableSAR = input(false, title="Show  Parabolic SAR ?")
+enableLongEMA = input(false, title="Show 50-120 EMA ?")
+enableVWAP = input(false, title="Show VWAP ?")
+enableCandleStickPatterns = input(false, title="Show Candlestick Patterns ?")
+enableCrossoverSignals30 = input(false, title="Enable 30min crossover signals ?")
+enableNrSignal = input(true, title="Enable NR4 & NR7 labels on Daily Charts ?")
+
+fast = 9, slow = 21, medium = 15, vSlow = 50, vvSlow = 120
+
+fastMA = ema(close, fast)
+slowMA = ema(close, slow)
+medMA = ema(close, medium)
+
+vslowMA = ema(close, vSlow)
+vvslowMA = ema(close, vvSlow)
+
+plot(enableEMA ? fastMA : na, color=color.aqua)
+//plot(enableEMA ? medMA : na, color=color.blue)
+plot(enableEMA ? slowMA : na, color=color.navy)
+
+plot(enableLongEMA ? vslowMA : na, color=color.red, style=plot.style_linebr)
+plot(enableLongEMA ? vvslowMA : na, color=color.red, style=plot.style_linebr,linewidth=2)
+
+plot(enableSAR ? sar(0.02, 0.02, 0.2) : na, style=plot.style_cross, linewidth=3, color = color.black)
+
+
+//Code for PIVOT and PDH, PDL
+h = security(syminfo.tickerid, 'D', high[1], lookahead=true)
+l = security(syminfo.tickerid, 'D', low[1], lookahead=true)
+c = security(syminfo.tickerid, 'D', close[1], lookahead=true)
+
+notHigherTimeframe = enablePivots and timeframe.period != "30" and timeframe.period != "45" and timeframe.period != "60" and timeframe.period != "120" and timeframe.period != "180" and timeframe.period != "240" and timeframe.period != "D" and timeframe.period != "W" and timeframe.period != "M"
+
+plot(enableVWAP and notHigherTimeframe ? vwap : na, color=color.black, linewidth=2)
+
+calculatePivot() =>
+    (h + l + c) / 3
+    
+calculateBC() =>
+    (h + l) / 2
+    
+calculateTC() =>
+    (calculatePivot() - calculateBC()) + calculatePivot()
+    
+truncate(number, decimals) =>
+    factor = pow(10, decimals)
+    int(number * factor) / factor
+    //round(number * 10) / 10
+ 
+pivot = calculatePivot()
+tc = calculateTC()
+bc = calculateBC()
+
+if tc < bc
+    t = tc
+    tc := bc
+    bc := t
+    
+r1Level = truncate((2 * pivot) - l, 2)
+r2Level = truncate(pivot + (h - l), 2)
+r3Level = truncate(h + 2 * (pivot - l), 2)
+r4Level = truncate(h + 3 * (pivot - l), 2)
+r5Level = truncate(h + 4 * (pivot - l), 2)
+s1Level = truncate((2 * pivot) - h, 2)
+s2Level = truncate(pivot - (h - l), 2)
+s3Level = truncate(l - 2 * (h - pivot), 2)
+s4Level = truncate(l - 3 * (h - pivot), 2)
+s5Level = truncate(l - 4 * (h - pivot), 2)
+
+//Code for PIVOT and PDH, PDL for the previous day
+previousH = security(syminfo.tickerid, 'D', high[2], lookahead=true)
+previousL = security(syminfo.tickerid, 'D', low[2], lookahead=true)
+previousC = security(syminfo.tickerid, 'D', close[2], lookahead=true)
+
+previousDayPivot = truncate((previousH + previousL + previousC ) / 3, 2)
+tempBC = truncate((previousH + previousL) / 2, 2)
+tempTC = truncate((previousDayPivot - tempBC) + previousDayPivot, 2)
+previousDayTC = tempTC > tempBC ? tempTC : tempBC
+previousDayBC = tempTC < tempBC ? tempTC : tempBC
+
+xPivot = truncate(pivot, 2)
+xTc = truncate(tc, 2) > truncate(bc, 2) ? truncate(tc, 2) : truncate(bc, 2)
+xBc = truncate(tc, 2) < truncate(bc, 2) ? truncate(tc, 2) : truncate(bc, 2)
+
+insideValue = previousDayTC > xTc and previousDayBC < xBc
+outsideValue = previousDayTC < xTc and previousDayBC > xBc
+higherValue = previousDayTC < xBc 
+overlappingHigherValue = previousDayTC < xTc and  previousDayTC > xBc
+lowerValue = previousDayBC > xTc
+overlappingLowerValue = previousDayBC < xTc and  previousDayBC > xBc
+unChangedValue = previousDayBC == xBc and previousDayTC == xTc
+
+//First Candle - CPR Range Analysis
+t = time("1440", session.regular) // 1440=60*24 is the number of minutes in a whole day. You may use "0930-1600" as second session parameter
+is_first_candle = na(t[1]) and not na(t) or t[1] < t
+is_first = notHigherTimeframe and is_first_candle
+plotshape(is_first and insideValue, title="Inside", text="CPR Inside Value \nBreakout", textcolor = color.black, color=color.white, style=shape.labeldown, location=location.abovebar, transp=40)
+plotshape(is_first and outsideValue, title="Inside", text="CPR Outside Value \nSideways", textcolor = color.black, color=color.white, style=shape.labeldown, location=location.abovebar, transp=40)
+plotshape(is_first and higherValue, title="Inside", text="CPR Higher Value \nBullish", textcolor = color.black, color=color.white, style=shape.labeldown, location=location.abovebar, transp=40)
+plotshape(is_first and overlappingHigherValue, title="Inside", text="CPR Overlapping Higher Value \nModerately Bullish", textcolor = color.black, color=color.white, style=shape.labeldown, location=location.abovebar, transp=40)
+plotshape(is_first and lowerValue, title="Inside", text="CPR Lower Value \nBearish", textcolor = color.black, color=color.white, style=shape.labeldown, location=location.abovebar, transp=40)
+plotshape(is_first and overlappingLowerValue, title="Inside", text="CPR Overlapping Lower Value \nModerately Bearish", textcolor = color.black, color=color.white, style=shape.labeldown, location=location.abovebar, transp=40)
+plotshape(is_first and unChangedValue, title="Inside", text="CPR Unchanged Value \nSideways/Breakout", textcolor = color.black, color=color.white, style=shape.labeldown, location=location.abovebar, transp=40)
+
+// Today's Session Start timestamp
+y = year(timenow)
+m = month(timenow)
+d = dayofmonth(timenow)
+
+// Start & End time for Today's CPR
+start = timestamp(y, m, d, 09, 15)
+end = start + 86400000
+
+// Plot Pivots till yesterday
+today = year == y and month == m and dayofmonth == d
+displayPivotsTillYesterday = notHigherTimeframe and not today
+
+//Commented because, the lines are painted slowly as the day progresses
+plot(series=displayPivotsTillYesterday ? truncate(pivot, 2) : na, title="P", color = pivot[1] != pivot and  notHigherTimeframe ? na : color.blue, style = plot.style_line, transp=0, linewidth=2) 
+plot(series=displayPivotsTillYesterday ? truncate(tc, 2) : na, title="TC", color = pivot[1] != pivot and notHigherTimeframe ? na: color.blue, style = plot.style_line, transp=0, linewidth=2)  
+plot(series=displayPivotsTillYesterday ? truncate(bc, 2) : na, title="BC", color = pivot[1] != pivot and notHigherTimeframe ? na: color.blue, style = plot.style_line, transp=0, linewidth=2) 
+plot(series=displayPivotsTillYesterday ? r1Level : na, title="R1", color = pivot[1] != pivot and notHigherTimeframe ? na: #32cd32, style = plot.style_circles, transp=0, linewidth=2)
+plot(series=displayPivotsTillYesterday ? s1Level : na, title="S1", color = pivot[1] != pivot and notHigherTimeframe ? na: #ff3030, style = plot.style_circles, transp=0, linewidth=2)
+plot(series=displayPivotsTillYesterday ? r2Level : na, title="R2", color = pivot[1] != pivot and notHigherTimeframe ? na: #32cd32, style = plot.style_circles, transp=0, linewidth=2)
+plot(series=displayPivotsTillYesterday ? s2Level : na, title="S2", color = pivot[1] != pivot and notHigherTimeframe ? na: #ff3030, style = plot.style_circles, transp=0, linewidth=2)
+plot(series=displayPivotsTillYesterday ? r3Level : na, title="R3", color = pivot[1] != pivot and notHigherTimeframe ? na: #32cd32, style = plot.style_circles, transp=0, linewidth=2)
+plot(series=displayPivotsTillYesterday ? s3Level : na, title="S3", color = pivot[1] != pivot and notHigherTimeframe ? na: #ff3030, style = plot.style_circles, transp=0, linewidth=2)
+plot(series=displayPivotsTillYesterday ? r4Level : na, title="R4", color = pivot[1] != pivot and notHigherTimeframe ? na: #32cd32, style = plot.style_circles, transp=0, linewidth=2)
+plot(series=displayPivotsTillYesterday ? s4Level : na, title="S4", color = pivot[1] != pivot and notHigherTimeframe ? na: #ff3030, style = plot.style_circles, transp=0, linewidth=2)
+r5 = plot(series=displayPivotsTillYesterday ? r5Level : na, title="R5", color = pivot[1] != pivot and notHigherTimeframe ? na: #32cd32, style = plot.style_circles, transp=0, linewidth=2)
+s5 = plot(series=displayPivotsTillYesterday ? s5Level : na, title="S5", color = pivot[1] != pivot and notHigherTimeframe ? na: #ff3030, style = plot.style_circles, transp=0, linewidth=2)
+pdh = plot(series=displayPivotsTillYesterday ? h : na, title="PDH", color = pivot[1] != pivot and notHigherTimeframe  ? na : color.black, style = plot.style_cross, transp=0, linewidth=2)
+pdl = plot(series=displayPivotsTillYesterday ? l : na, title="PDL", color = pivot[1] != pivot and notHigherTimeframe  ? na : color.black , style = plot.style_cross, transp=0, linewidth=2)
+fill(pdh, r5, color = color.green)
+fill(pdl, s5, color = color.red)
+
+//New Pivot Logic
+if notHigherTimeframe
+    pivotLine = line.new(start, truncate(pivot, 2), end, truncate(pivot, 2), xloc.bar_time, color=color.navy, width = 3)
+    tcLine = line.new(start, truncate(tc, 2), end,  truncate(tc, 2), xloc.bar_time, color=color.navy)
+    bcLine = line.new(start,  truncate(bc, 2), end,  truncate(bc, 2), xloc.bar_time, color=color.navy)
+    
+    r1Line = line.new(start, r1Level, end,  r1Level, xloc.bar_time, color=color.green, style = line.style_dotted, width = 3)
+    s1Line = line.new(start, s1Level, end,  s1Level, xloc.bar_time, color=color.red, style = line.style_dotted, width = 3)
+    r2Line = line.new(start, r2Level, end,  r2Level, xloc.bar_time, color=color.green, style = line.style_dotted, width = 3)
+    s2Line = line.new(start, s2Level, end,  s2Level, xloc.bar_time, color=color.red, style = line.style_dotted, width = 3)
+    r3Line = line.new(start, r3Level, end,  r3Level, xloc.bar_time, color=color.green, style = line.style_dotted, width = 3)
+    s3Line = line.new(start, s3Level, end,  s3Level, xloc.bar_time, color=color.red, style = line.style_dotted, width = 3)
+    r4Line = line.new(start, r4Level, end,  r4Level, xloc.bar_time, color=color.green, style = line.style_dotted, width = 3)
+    s4Line = line.new(start, s4Level, end,  s4Level, xloc.bar_time, color=color.red, style = line.style_dotted, width = 3)
+    r5Line = line.new(start, r5Level, end,  r5Level, xloc.bar_time, color=color.green, style = line.style_dotted, width = 3)
+    s5Line = line.new(start, s5Level, end,  s5Level, xloc.bar_time, color=color.red, style = line.style_dotted, width = 3)
+    
+    pdhLine = line.new(start, h, end,  h, xloc.bar_time, color=color.black, style = line.style_dashed, width = 3)
+    pdlLine = line.new(start, l, end,  l, xloc.bar_time, color=color.black, style = line.style_dashed, width = 3)
+    
+    line.delete(pivotLine[1])
+
+
+//Choppiness Index Chart
+
+// length = input(14, title="Length")
+// doavg = input(true,title="Do Average?")
+// avg = input(4, title="Average Length")
+// l1 = input(61.8, title="Extreme Chop")
+// l2 = input(50.0, title="Midline")
+// l3 = input(38.2, title="Trending")
+
+length = 14
+doavg = true
+avg = 4
+l1 = 61.8
+l2 = 50.0
+l3 = 38.2
+
+str = sum(tr,length)
+ltl = lowest(low <= close[1] ? low : close[1],length)
+hth = highest(high >= close[1] ? high : close[1],length)
+height = hth - ltl
+chop = 100 * (log10(str / height) / log10(length))
+
+//Plot Choppiness Index - Commented 
+// plot(chop, color=#42B0FF, linewidth=2)
+// plot(doavg ? sma(chop,avg) : na, color=color.black)
+// hli1 = hline(l1)
+// hli2 = hline(l2)
+// hli3 = hline(l3)
+// fill(hli1,hli2,color.black,80)
+// fill(hli2,hli3,#C8D974,80)
+
+//Draw the Label with necessary parameters like ATR, Choppiness Index
+pAtr = security(syminfo.tickerid, '5', atr(14), lookahead=true)
+labelString = "ATR " +tostring(pAtr) + "\nChopiness Index " + tostring(chop)
+labelOne = label.new(bar_index, na, labelString, color=close >= open ? color.green : color.red, textcolor=color.white, style=label.style_labeldown)
+label.set_textalign(labelOne, text.align_right) 
+label.set_y(labelOne, highest(50) + (high[1] * 2/100))
+label.delete(labelOne[1])
+
+//Print MA analysis as label
+emaCrossOverInThirtyMinFrame = (vslowMA[1] > vvslowMA[1]) ? "BUY" : "NA"
+emaSignalForThirtyFrame = (vslowMA[1] < vvslowMA[1]) ? "SELL" : emaCrossOverInThirtyMinFrame
+signalOne = "Crossover Signal from 30 Min - " + emaSignalForThirtyFrame
+
+emaCrossOverInFiveMinFrame = (slowMA[1] < fastMA[1]) ? "BUY" : "NA"
+emaSignalForFiveMinFrame = (slowMA[1] > fastMA[1]) ? "SELL" : emaCrossOverInFiveMinFrame
+signalTwo = "Crossover Signal from  5 Min - " + emaSignalForFiveMinFrame
+
+abovePDHSignal = (close[1] > h) ? "Price crossed above PDH" : "NA" 
+belowPDLSignal = (close[1] < l) ? "Price crossed below PDL" : "NA"
+pdlPdhSignal = (abovePDHSignal != "NA") ? abovePDHSignal : (belowPDLSignal != "NA") ? belowPDLSignal : "Price between PDL and PDH"
+signals = signalOne + "\n" + signalTwo + "\n" + pdlPdhSignal + "\n"
+labelTwo = label.new(bar_index, na, signals, color=close >= open ? color.new(color.green, 10) : color.new(color.red, 10), textcolor=color.white, style=label.style_label_up)
+label.set_textalign(labelTwo, text.align_right) 
+label.set_y(labelTwo, lowest(low, 50) - (close[1] * 2/100))
+label.delete(labelTwo[1])
+
+
+//Crossover icon
+thirtyMinCrossoverBuy = crossover(vslowMA,vvslowMA)
+thirtyMinCrossoverSell = crossunder(vslowMA,vvslowMA)
+
+plotshape(enableCrossoverSignals30 ? thirtyMinCrossoverSell : na, title='30min Crossover', text="30min Sell Crossover", location=location.abovebar, color=color.black, style=shape.triangledown, size=size.small)
+plotshape(enableCrossoverSignals30 ? thirtyMinCrossoverBuy : na, title='30min Crossover', text="30min Buy Crossover", location=location.belowbar, color=color.black, style=shape.triangleup, size=size.small)
+
+
+//NR4 & NR7 Indicator - Only on daily Time Frame
+enableNRindicator = timeframe.period == "D" and enableNrSignal
+nr4 = (tr <= tr[1]) and (tr <= tr[2]) and (tr <= tr[3])
+nr7 = nr4 and (tr <= tr[4]) and (tr <= tr[5]) and (tr <= tr[6])
+
+//barcolor( nr7 ? color.fuchsia : na, offset = 0, editable = true, title = "NR7")
+//barcolor( nr4 ? color.blue : na, offset = 0, editable = true, title = "NR4")
+plotshape(series=enableNRindicator ? nr4 : na, title= "NR4", location=location.belowbar, color=color.black, style=shape.arrowdown, text="NR\n4__")
+plotshape(series=enableNRindicator ? nr7 : na , title= "NR7", location=location.abovebar, color=color.black, style=shape.arrowdown, text="NR\n4&7")
+
+//Candestick patter analysis
+bear_engulf = (close[1] > open[1] and + open > close and open >= close[1] and + open[1] >= close and + open - close > close[1] - open[1])
+plotshape(enableCandleStickPatterns ? bear_engulf : na, title='bear engulf', text='bear\nengulf', color=color.red, style=shape.arrowdown, transp=40)
+
+bull_engulf = (open[1] > close[1] and + close > open and + close >= open[1] and + close[1] >= open and + close - open > open[1] - close[1])
+plotshape(enableCandleStickPatterns ? bull_engulf : na, title='bull engulf', text='bull\nengulf', location=location.belowbar, color=color.lime, style=shape.arrowup, transp=40)
+
+
+//Code for Weekly PIVOTs
+///////////////////////////////////////////////////////////////////
+
+wh = security(syminfo.tickerid, 'W', high[1], lookahead=true)
+wl = security(syminfo.tickerid, 'W', low[1], lookahead=true)
+wc = security(syminfo.tickerid, 'W', close[1], lookahead=true)
+
+calculateWPivot() =>
+    (wh + wl + wc) / 3
+    
+calculateWBC() =>
+    (wh + wl) / 2
+    
+calculateWTC() =>
+    (calculateWPivot() - calculateWBC()) + calculateWPivot()
+	
+wpivot = calculateWPivot()
+wtc = calculateWTC()
+wbc = calculateWBC()
+
+if wtc < wbc
+    wt = wtc
+    wtc := wbc
+    wbc := wt
+    
+wr1Level = truncate((2 * wpivot) - wl, 2)
+wr2Level = truncate(wpivot + (wh - wl), 2)
+
+ws1Level = truncate((2 * wpivot) - wh, 2)
+ws2Level = truncate(wpivot - (wh - wl), 2)
+
+
+
+plot(series=enableWeeklyPivots ? truncate(wpivot, 2) : na, title="P", color = wpivot[1] != wpivot ? na : color.blue, style = plot.style_line, transp=0, linewidth=2) 
+plot(series=enableWeeklyPivots ? truncate(wtc, 2) : na, title="TC", color = wpivot[1] != wpivot ? na: color.blue, style = plot.style_line, transp=0, linewidth=2)  
+plot(series=enableWeeklyPivots ? truncate(wbc, 2) : na, title="BC", color = wpivot[1] != wpivot ? na: color.blue, style = plot.style_line, transp=0, linewidth=2) 
+plot(series=enableWeeklyPivots ? wr1Level : na, title="R1", color = wpivot[1] != wpivot ? na: #32cd32, style = plot.style_circles, transp=0, linewidth=2)
+plot(series=enableWeeklyPivots ? ws1Level : na, title="S1", color = wpivot[1] != wpivot ? na: #ff3030, style = plot.style_circles, transp=0, linewidth=2)
+plot(series=enableWeeklyPivots ? wr2Level : na, title="R2", color = wpivot[1] != wpivot ? na: #32cd32, style = plot.style_circles, transp=0, linewidth=2)
+plot(series=enableWeeklyPivots ? ws2Level : na, title="S2", color = wpivot[1] != wpivot ? na: #ff3030, style = plot.style_circles, transp=0, linewidth=2)
+
+
+
+//Code for Next Week Pivot Prediction
+///////////////////////////////////////////////////////////////////
+
+nwh = security(syminfo.tickerid, 'W', high[0], lookahead=true)
+nwl = security(syminfo.tickerid, 'W', low[0], lookahead=true)
+nwc = security(syminfo.tickerid, 'W', close[0], lookahead=true)
+
+calculateNWPivot() =>
+    (nwh + nwl + nwc) / 3
+    
+calculateNWBC() =>
+    (nwh + nwl) / 2
+    
+calculateNWTC() =>
+    (calculateNWPivot() - calculateNWBC()) + calculateNWPivot()
+	
+nwpivot = calculateNWPivot()
+nwtc = calculateNWTC()
+nwbc = calculateNWBC()
+
+if nwtc < nwbc
+    nwt = nwtc
+    nwtc := nwbc
+    nwbc := nwt
+    
+nwr1Level = truncate((2 * nwpivot) - nwl, 2)
+nwr2Level = truncate(nwpivot + (nwh - nwl), 2)
+
+nws1Level = truncate((2 * nwpivot) - nwh, 2)
+nws2Level = truncate(nwpivot - (nwh - nwl), 2)
+
+// Next Week Start & End time
+nextWeekStart = timestamp(y, m, d, 09, 15) + (86400000)
+nextWeekEnd = nextWeekStart + (86400000 * 5)
+
+
+if enableNextWeekPivots
+    nwpivotLine = line.new(nextWeekStart, truncate(nwpivot, 2), nextWeekEnd, truncate(nwpivot, 2), xloc.bar_time, color=color.navy, width = 3)
+    nwtcLine = line.new(nextWeekStart, truncate(nwtc, 2), nextWeekEnd,  truncate(nwtc, 2), xloc.bar_time, color=color.navy)
+    nwbcLine = line.new(nextWeekStart,  truncate(nwbc, 2), nextWeekEnd,  truncate(nwbc, 2), xloc.bar_time, color=color.navy)
+    
+    nwr1Line = line.new(nextWeekStart, nwr1Level, nextWeekEnd,  nwr1Level, xloc.bar_time, color=color.green, style = line.style_dotted, width = 3)
+    nws1Line = line.new(nextWeekStart, nws1Level, nextWeekEnd,  nws1Level, xloc.bar_time, color=color.red, style = line.style_dotted, width = 3)
+    nwr2Line = line.new(nextWeekStart, nwr2Level, nextWeekEnd,  nwr2Level, xloc.bar_time, color=color.green, style = line.style_dotted, width = 3)
+    nws2Line = line.new(nextWeekStart, nws2Level, nextWeekEnd,  nws2Level, xloc.bar_time, color=color.red, style = line.style_dotted, width = 3)
+
+//Code for Tomorrow Pivot Prediction
+///////////////////////////////////////////////////////////////////
+
+tomorrowh = security(syminfo.tickerid, 'D', high[0], lookahead=true)
+tomorrowl = security(syminfo.tickerid, 'D', low[0], lookahead=true)
+tomorrowc = security(syminfo.tickerid, 'D', close[0], lookahead=true)
+
+calculateTomorowPivot() =>
+    (tomorrowh + tomorrowl + tomorrowc) / 3
+    
+calculateTomorowBC() =>
+    (tomorrowh + tomorrowl) / 2
+    
+calculateTomorowTC() =>
+    (calculateTomorowPivot() - calculateTomorowBC()) + calculateTomorowPivot()
+	
+tomorrowpivot = calculateTomorowPivot()
+tomorrowtc = calculateTomorowTC()
+tomorrowbc = calculateTomorowBC()
+
+if tomorrowtc < tomorrowbc
+    tomorrowt = tomorrowtc
+    tomorrowtc := tomorrowbc
+    tomorrowbc := tomorrowt
+    
+tomorrowr1Level = truncate((2 * tomorrowpivot) - tomorrowl, 2)
+tomorrowr2Level = truncate(tomorrowpivot + (tomorrowh - tomorrowl), 2)
+
+tomorrows1Level = truncate((2 * tomorrowpivot) - tomorrowh, 2)
+tomorrows2Level = truncate(tomorrowpivot - (tomorrowh - tomorrowl), 2)
+
+// Next Week Start & End time
+tomorrowStart = timestamp(y, m, d, 09, 15) + (86400000)
+tomorrowEnd = tomorrowStart + (86400000)
+
+
+if enableTomorrowPivots
+    tomorrowpivotLine = line.new(tomorrowStart, truncate(tomorrowpivot, 2), tomorrowEnd, truncate(tomorrowpivot, 2), xloc.bar_time, color=color.navy, width = 3)
+    tomorrowtcLine = line.new(tomorrowStart, truncate(tomorrowtc, 2), tomorrowEnd,  truncate(tomorrowtc, 2), xloc.bar_time, color=color.navy)
+    tomorrowbcLine = line.new(tomorrowStart,  truncate(tomorrowbc, 2), tomorrowEnd,  truncate(tomorrowbc, 2), xloc.bar_time, color=color.navy)
+    
+    tomorrowr1Line = line.new(tomorrowStart, tomorrowr1Level, tomorrowEnd,  tomorrowr1Level, xloc.bar_time, color=color.green, style = line.style_dotted, width = 3)
+    tomorrows1Line = line.new(tomorrowStart, tomorrows1Level, tomorrowEnd,  tomorrows1Level, xloc.bar_time, color=color.red, style = line.style_dotted, width = 3)
+    tomorrowr2Line = line.new(tomorrowStart, tomorrowr2Level, tomorrowEnd,  tomorrowr2Level, xloc.bar_time, color=color.green, style = line.style_dotted, width = 3)
+    tomorrows2Line = line.new(tomorrowStart, tomorrows2Level, tomorrowEnd,  tomorrows2Level, xloc.bar_time, color=color.red, style = line.style_dotted, width = 3)
+
+//End of File
