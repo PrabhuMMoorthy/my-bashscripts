@@ -9,11 +9,16 @@ function formatPrice(n){
 }
 
 var newDiv = document.createElement('div');
-newDiv.innerHTML = '<div class="row modal-footer"><div class="four columns"><div class="label">P&L</div><h2 class="value" id="addonPnl">X</h2></div>'+
+newDiv.innerHTML = '<div id="pnlAddon" class="row modal-footer"><div class="four columns"><div class="label">P&L</div><h2 class="value" id="addonPnl">X</h2></div>'+
 '<div class="four columns"><div class="label">Intraday Max Profit</div><h2 id="addonHigh">X</h2></div>'+
-'<div class="four columns"><div class="label">Intrday Max Loss</div><h2 id="addonLow">X</h2></div></div>'+
+'<div class="four columns"><div class="label">Intraday Max Loss</div><h2 id="addonLow">X</h2></div></div>'+
 '<div class="row"><br></div>';
-$(".instrument-search").append(newDiv);	
+if($(".instrument-search")){
+	$(".instrument-search").append(newDiv);	
+}else{
+console.log('Basket is not opened');
+}
+
 
 let addonHighValue = 0;
 let addonLowValue = 0;
@@ -21,6 +26,21 @@ let addonLowValue = 0;
 //Works only for 2 rows, that too sell positions
 function calculate(){
 	console.log('Running');
+	
+	let isBasketOpen = document.evaluate("count(//div[@class='instrument-search'])", document, null, XPathResult.ANY_TYPE, null ).numberValue > 0;
+	let isAddonActivated = document.evaluate("count(//div[@id='pnlAddon'])", document, null, XPathResult.ANY_TYPE, null ).numberValue > 0;
+	
+	if(!isBasketOpen){
+		return;
+	}
+	
+	if(isBasketOpen && !isAddonActivated){
+		getElementByXpath("//div[@class='instrument-search']").append(newDiv);	
+		console.log('Loading addon elements');
+		addonHighValue = 0;
+		addonLowValue = 0;
+	}
+	
 	let noOfLegs = document.evaluate("count(//div[@class='basket-table']//tbody//tr)", document, null, XPathResult.ANY_TYPE, null ).numberValue;
 	
 	let totalEntryPrice = 0;
