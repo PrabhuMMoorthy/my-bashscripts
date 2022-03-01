@@ -1,0 +1,63 @@
+//Script Starts
+
+function getElementByXpath(path){
+  return document.evaluate(path, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+}
+
+function formatPrice(n){
+	return (n < 0 ? "" : "+") + n;
+}
+
+var newDiv = document.createElement('div');
+newDiv.innerHTML = '<div class="row modal-footer"><div class="four columns"><div class="label">P&L</div><h2 class="value" id="addonPnl">X</h2></div>'+
+'<div class="four columns"><div class="label">Intraday Max Profit</div><h2 id="addonHigh">X</h2></div>'+
+'<div class="four columns"><div class="label">Intrday Max Loss</div><h2 id="addonLow">X</h2></div></div>'+
+'<div class="row"><br></div>';
+$(".instrument-search").append(newDiv);	
+
+let addonHighValue = 0;
+let addonLowValue = 0;
+
+//Works only for 2 rows, that too sell positions
+function calculate(){
+	console.log('Running');
+	let noOfLegs = document.evaluate("count(//div[@class='basket-table']//tbody//tr)", document, null, XPathResult.ANY_TYPE, null ).numberValue;
+	
+	let totalEntryPrice = 0;
+	let pnl = 0;
+	
+	for(var i = 1; i <= noOfLegs; i++){
+		//console.log('i: '+i);
+		let oType = getElementByXpath("//div[@class='basket-table']//tbody//tr["+i+"]//td[1]//span").innerText;
+		let qty = parseFloat(getElementByXpath("//div[@class='basket-table']//tbody//tr["+i+"]//td[5]").innerText);
+		let ltp = parseFloat(getElementByXpath("//div[@class='basket-table']//tbody//tr["+i+"]//td[2]//div[2]").innerText.replaceAll("LTP:", "").replaceAll("₹","").trim());
+		let entryPrice = parseFloat(getElementByXpath("//div[@class='basket-table']//tbody//tr["+i+"]//td[6]//div").innerText);
+		
+		let rowEntryPrice = (entryPrice * qty);
+		let rowPnl = 0;
+		if(oType == 'SELL'){
+			rowPnl = rowEntryPrice - (ltp * qty);
+		}else{
+			rowPnl = (ltp * qty) - rowEntryPrice;
+		}
+		pnl = pnl + rowPnl;
+	
+		//console.log('entryPrice: '+ entryPrice);
+	}
+	
+	addonHighValue = pnl > addonHighValue ? pnl : addonHighValue;
+	addonLowValue = pnl < addonLowValue ? pnl : addonLowValue;
+	
+	if(document.getElementById("addonPnl")){
+		document.getElementById("addonPnl").innerText  = formatPrice(pnl.toFixed(2));
+	}
+	if(document.getElementById("addonHigh")){
+		document.getElementById("addonHigh").innerText  = formatPrice(addonHighValue.toFixed(2));
+	}
+	if(document.getElementById("addonLow")){
+		document.getElementById("addonLow").innerText  = formatPrice(addonLowValue.toFixed(2));
+	}
+}
+setInterval(calculate, 3000);
+
+//Script Ends

@@ -1,0 +1,46 @@
+//Script Starts
+
+function getElementByXpath(path){
+  return document.evaluate(path, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+}
+
+function formatPrice(n){
+	return (n < 0 ? "" : "+") + n;
+}
+
+var newDiv = document.createElement('div');
+newDiv.innerHTML = '<div class="row modal-footer"><div class="four columns"><div class="label">P&L</div><h2 class="value" id="addonPnl">X</h2></div>'+
+'<div class="four columns"><div class="label">Intraday Max Profit</div><h2 id="addonHigh">X</h2></div>'+
+'<div class="four columns"><div class="label">Intrday Max Loss</div><h2 id="addonLow">X</h2></div></div>'+
+'<div class="row"><br></div>';
+$(".instrument-search").append(newDiv);	
+
+let addonHighValue = 0;
+let addonLowValue = 0;
+
+//Works only for 2 rows, that too sell positions
+function calculate(){
+	//console.log('checking... ');
+	let oType1 = getElementByXpath("//div[@class='basket-table']//tbody//tr[1]//td[1]//span").innerText;
+	let qty1 = parseFloat(getElementByXpath("//div[@class='basket-table']//tbody//tr[1]//td[5]").innerText);
+	let ltp1 = parseFloat(getElementByXpath("//div[@class='basket-table']//tbody//tr[1]//td[2]//div[2]").innerText.replaceAll("LTP:", "").replaceAll("₹","").trim());
+	let entryPrice1 = parseFloat(getElementByXpath("//div[@class='basket-table']//tbody//tr[1]//td[6]//div").innerText);
+	
+	let oType2 = getElementByXpath("//div[@class='basket-table']//tbody//tr[2]//td[1]//span").innerText;
+	let qty2 = parseFloat(getElementByXpath("//div[@class='basket-table']//tbody//tr[2]//td[5]").innerText);
+	let ltp2 = parseFloat(getElementByXpath("//div[@class='basket-table']//tbody//tr[2]//td[2]//div[2]").innerText.replaceAll("LTP:", "").replaceAll("₹","").trim());
+	let entryPrice2 = parseFloat(getElementByXpath("//div[@class='basket-table']//tbody//tr[2]//td[6]//div").innerText);
+	
+	let totalEntryPrice = (entryPrice1*qty1) + (entryPrice2*qty2);
+	
+	let pnl = totalEntryPrice - ((ltp1*qty1) + (ltp2*qty2));
+	addonHighValue = pnl > addonHighValue ? pnl : addonHighValue;
+	addonLowValue = pnl < addonLowValue ? pnl : addonLowValue;
+	
+	document.getElementById("addonPnl").innerText  = formatPrice(pnl.toFixed(2));
+	document.getElementById("addonHigh").innerText  = formatPrice(addonHighValue.toFixed(2));
+	document.getElementById("addonLow").innerText  = formatPrice(addonLowValue.toFixed(2));
+}
+setInterval(calculate, 2000);
+
+//Script Ends
